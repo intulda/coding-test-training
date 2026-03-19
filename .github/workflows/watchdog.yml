@@ -6,6 +6,7 @@ on:
   push:
     paths:
       - "status/*.done"
+      - "journal/*.md"
   workflow_dispatch:
 
 jobs:
@@ -16,29 +17,105 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Get today
+        id: today
+        run: |
+          TODAY=$(TZ=Asia/Seoul date +'%Y-%m-%d')
+          echo "today=$TODAY" >> $GITHUB_OUTPUT
+
       - name: Check today's status
         id: check
         run: |
-          TODAY=$(TZ=Asia/Seoul date +'%Y-%m-%d')
-          echo "TODAY=$TODAY"
+          TODAY=${{ steps.today.outputs.today }}
 
           if [ -f "status/$TODAY.done" ]; then
             echo "done=true" >> $GITHUB_OUTPUT
-            echo "Found status/$TODAY.done"
           else
             echo "done=false" >> $GITHUB_OUTPUT
-            echo "Did not find status/$TODAY.done"
           fi
-          
-      - name: Send success message
+
+      - name: Build success message from journal
+        id: success_message
         if: github.event_name == 'push' && steps.check.outputs.done == 'true'
         run: |
           TODAY=${{ steps.today.outputs.today }}
-          MESSAGE="🟢 오늘 코테 완료 ($TODAY). 잘했다."
+          JOURNAL_FILE="journal/$TODAY.md"
 
-          curl -H "Content-Type: application/json" \
-            -d "{\"content\": \"$MESSAGE\"}" \
-            "${{ secrets.DISCORD_WEBHOOK_URL }}"
+          python3 - <<'PY'
+          import os
+          import json
+          from pathlib import Path
+
+          today = os.environ["TODAY"]
+          journal_file = Path(os.environ["JOURNAL_FILE"])
+
+          def extract_value(lines, prefix):
+              for line in lines:
+                  if line.startswith(prefix):
+                      return line[len(prefix):].strip()
+              return "-"
+
+          problem = "-"
+          category = "-"
+          first_approach = "-"
+          blocked = "-"
+          result = "-"
+          retry = "-"
+
+          if journal_file.exists():
+              lines = journal_file.read_text(encoding="utf-8").splitlines()
+              problem = extract_value(lines, "- 문제:")
+              category = extract_value(lines, "- 유형:")
+              first_approach = extract_value(lines, "- 첫 접근:")
+              blocked = extract_value(lines, "- 막힌 지점:")
+              result = extract_value(lines, "- 결과:")
+              retry = extract_value(lines, "- 내일 재풀이:")
+
+          def shorten(text, limit=120):
+              text = " ".join(text.split())
+              return text if len(text) <= limit else text[:limit - 3] + "..."
+
+          message = (
+              f"🟢 오늘 코테 완료 ({today})\n"
+              f"문제: {shorten(problem)}\n"
+              f"유형: {shorten(category)}\n"
+              f"첫 접근: {shorten(first_approach)}\n"
+              f"막힌 지점: {shorten(blocked)}\n"
+              f"결과: {shorten(result)}\n"
+              f"내일 재풀이: {shorten(retry)}"
+          )
+
+          github_output = os.environ["GITHUB_OUTPUT"]
+          with open(github_output, "a", encoding="utf-8") as f:
+              f.write(f"message<<EOF\n{message}\nEOF\n")
+          PY
+        env:
+          TODAY: ${{ steps.today.outputs.today }}
+          JOURNAL_FILE: journal/${{ steps.today.outputs.today }}.md
+
+      - name: Send success message
+        if: github.event_name == 'push' && steps.check.outputs.done == 'true'
+        run: |
+          python3 - <<'PY'
+          import os
+          import json
+          import urllib.request
+
+          webhook_url = os.environ["DISCORD_WEBHOOK_URL"]
+          message = os.environ["MESSAGE"]
+
+          data = json.dumps({"content": message}).encode("utf-8")
+          req = urllib.request.Request(
+              webhook_url,
+              data=data,
+              headers={"Content-Type": "application/json"}
+          )
+          with urllib.request.urlopen(req) as resp:
+              print(resp.status)
+          PY
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          MESSAGE: ${{ steps.success_message.outputs.message }}
 
       - name: Send alert
         if: github.event_name == 'schedule' && steps.check.outputs.done == 'false'
@@ -53,10 +130,23 @@ jobs:
             MESSAGE="🔴 오늘 0일 될 위기다. 뭐라도 만들어."
           fi
 
-          curl -H "Content-Type: application/json" \
-            -d "{\"content\": \"$MESSAGE\"}" \
-            "${{ secrets.DISCORD_WEBHOOK_URL }}"
+          python3 - <<'PY'
+          import os
+          import json
+          import urllib.request
 
-          curl -H "Content-Type: application/json" \
-            -d "{\"content\": \"$MESSAGE\"}" \
-            "${{ secrets.DISCORD_WEBHOOK_URL }}"
+          webhook_url = os.environ["DISCORD_WEBHOOK_URL"]
+          message = os.environ["MESSAGE"]
+
+          data = json.dumps({"content": message}).encode("utf-8")
+          req = urllib.request.Request(
+              webhook_url,
+              data=data,
+              headers={"Content-Type": "application/json"}
+          )
+          with urllib.request.urlopen(req) as resp:
+              print(resp.status)
+          PY
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          MESSAGE: ${{ env.MESSAGE }}
