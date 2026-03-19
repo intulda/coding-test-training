@@ -3,6 +3,9 @@ name: Coding Test Watchdog
 on:
   schedule:
     - cron: "0 1-14 * * *" # KST 10:00 ~ 23:00
+  push:
+    paths:
+      - "status/*.done"
   workflow_dispatch:
 
 jobs:
@@ -26,12 +29,21 @@ jobs:
             echo "done=false" >> $GITHUB_OUTPUT
             echo "Did not find status/$TODAY.done"
           fi
+          
+      - name: Send success message
+        if: github.event_name == 'push' && steps.check.outputs.done == 'true'
+        run: |
+          TODAY=${{ steps.today.outputs.today }}
+          MESSAGE="🟢 오늘 코테 완료 ($TODAY). 잘했다."
 
-      - name: Send Discord Alert
-        if: steps.check.outputs.done == 'false'
+          curl -H "Content-Type: application/json" \
+            -d "{\"content\": \"$MESSAGE\"}" \
+            "${{ secrets.DISCORD_WEBHOOK_URL }}"
+
+      - name: Send alert
+        if: github.event_name == 'schedule' && steps.check.outputs.done == 'false'
         run: |
           HOUR=$(TZ=Asia/Seoul date +'%H')
-          echo "HOUR=$HOUR"
 
           if [ "$HOUR" -lt "18" ]; then
             MESSAGE="🟡 아직 코테 안했네. 지금 가볍게 시작해."
@@ -41,7 +53,9 @@ jobs:
             MESSAGE="🔴 오늘 0일 될 위기다. 뭐라도 만들어."
           fi
 
-          echo "MESSAGE=$MESSAGE"
+          curl -H "Content-Type: application/json" \
+            -d "{\"content\": \"$MESSAGE\"}" \
+            "${{ secrets.DISCORD_WEBHOOK_URL }}"
 
           curl -H "Content-Type: application/json" \
             -d "{\"content\": \"$MESSAGE\"}" \
