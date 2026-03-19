@@ -76,13 +76,15 @@ jobs:
               return text if len(text) <= limit else text[:limit - 3] + "..."
 
           message = (
-              f"🟢 오늘 코테 완료 ({today})\n"
+              f"==============================\n"
+              f"오늘 코테 완료 ({today})\n"
               f"문제: {shorten(problem)}\n"
               f"유형: {shorten(category)}\n"
               f"첫 접근: {shorten(first_approach)}\n"
               f"막힌 지점: {shorten(blocked)}\n"
               f"결과: {shorten(result)}\n"
               f"내일 재풀이: {shorten(retry)}"
+              f"==============================\n"
           )
 
           github_output = os.environ["GITHUB_OUTPUT"]
