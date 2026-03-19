@@ -100,16 +100,21 @@ jobs:
           import os
           import json
           import urllib.request
-
+          
           webhook_url = os.environ["DISCORD_WEBHOOK_URL"]
           message = os.environ["MESSAGE"]
-
+          
           data = json.dumps({"content": message}).encode("utf-8")
           req = urllib.request.Request(
               webhook_url,
               data=data,
-              headers={"Content-Type": "application/json"}
+              headers={
+                  "Content-Type": "application/json",
+                  "User-Agent": "Mozilla/5.0 (GitHubActions; CodingTestWatchdog/1.0)"
+              },
+              method="POST"
           )
+          
           with urllib.request.urlopen(req) as resp:
               print(resp.status)
           PY
@@ -121,7 +126,7 @@ jobs:
         if: github.event_name == 'schedule' && steps.check.outputs.done == 'false'
         run: |
           HOUR=$(TZ=Asia/Seoul date +'%H')
-
+          
           if [ "$HOUR" -lt "18" ]; then
             MESSAGE="🟡 아직 코테 안했네. 지금 가볍게 시작해."
           elif [ "$HOUR" -lt "21" ]; then
@@ -129,21 +134,26 @@ jobs:
           else
             MESSAGE="🔴 오늘 0일 될 위기다. 뭐라도 만들어."
           fi
-
+          
           python3 - <<'PY'
           import os
           import json
           import urllib.request
-
+          
           webhook_url = os.environ["DISCORD_WEBHOOK_URL"]
           message = os.environ["MESSAGE"]
-
+          
           data = json.dumps({"content": message}).encode("utf-8")
           req = urllib.request.Request(
               webhook_url,
               data=data,
-              headers={"Content-Type": "application/json"}
+              headers={
+                  "Content-Type": "application/json",
+                  "User-Agent": "Mozilla/5.0 (GitHubActions; CodingTestWatchdog/1.0)"
+              },
+              method="POST"
           )
+          
           with urllib.request.urlopen(req) as resp:
               print(resp.status)
           PY
