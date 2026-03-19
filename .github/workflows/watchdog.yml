@@ -1,0 +1,48 @@
+name: Coding Test Watchdog
+
+on:
+  schedule:
+    - cron: "0 1-14 * * *" # KST 10:00 ~ 23:00
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Check today's status
+        id: check
+        run: |
+          TODAY=$(TZ=Asia/Seoul date +'%Y-%m-%d')
+          echo "TODAY=$TODAY"
+
+          if [ -f "status/$TODAY.done" ]; then
+            echo "done=true" >> $GITHUB_OUTPUT
+            echo "Found status/$TODAY.done"
+          else
+            echo "done=false" >> $GITHUB_OUTPUT
+            echo "Did not find status/$TODAY.done"
+          fi
+
+      - name: Send Discord Alert
+        if: steps.check.outputs.done == 'false'
+        run: |
+          HOUR=$(TZ=Asia/Seoul date +'%H')
+          echo "HOUR=$HOUR"
+
+          if [ "$HOUR" -lt "18" ]; then
+            MESSAGE="🟡 아직 코테 안했네. 지금 가볍게 시작해."
+          elif [ "$HOUR" -lt "21" ]; then
+            MESSAGE="🟠 슬슬 위험하다. 최소 한 문제 착수해."
+          else
+            MESSAGE="🔴 오늘 0일 될 위기다. 뭐라도 만들어."
+          fi
+
+          echo "MESSAGE=$MESSAGE"
+
+          curl -H "Content-Type: application/json" \
+            -d "{\"content\": \"$MESSAGE\"}" \
+            "${{ secrets.DISCORD_WEBHOOK_URL }}"
